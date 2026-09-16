@@ -245,7 +245,19 @@ func (this_ *V7Service) GetMapping(indexName string) (res interface{}, err error
 		return
 	}
 	//defer client.Stop()
-	mappingMap, err := client.GetMapping().Index(indexName).Do(context.Background())
+	// ES 8.x 已移除 mapping type，而 olivere v7 的 GetMapping 在没有指定 type 时
+	// 会默认拼接 "_all" 当作 type，生成 GET /{index}/_mapping/_all，
+	// 在 ES 8.x 上会返回 400 no handler found。这里直接请求 /{index}/_mapping，
+	// 兼容 ES 6.x/7.x/8.x。
+	response, err := client.PerformRequest(context.Background(), elastic.PerformRequestOptions{
+		Method: "GET",
+		Path:   "/" + indexName + "/_mapping",
+	})
+	if err != nil {
+		return
+	}
+	var mappingMap map[string]interface{}
+	err = util.JSONDecode([]byte(response.Body), &mappingMap)
 	if err != nil {
 		return
 	}
